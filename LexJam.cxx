@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Your Name <your@email.address>
+ * Copyright 2018 Kacper Kasper <kacperkasper@gmail.com>
  * All rights reserved. Distributed under the terms of the MIT license.
  */
 

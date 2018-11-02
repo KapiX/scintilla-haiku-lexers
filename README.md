@@ -8,3 +8,9 @@ Before this project can be compiled, it needs [lexlib](https://sourceforge.net/p
 Then run `make all` (`make` will not work).
 
 It also requires makefile-engine (installed by default in Haiku).
+
+## Installation
+
+Lexers should be added to any data directory in scintilla/lexers (for example /system/data/scintilla/lexers).
+
+Applications should look for these lexers there.
