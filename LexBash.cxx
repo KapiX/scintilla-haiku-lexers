@@ -14,6 +14,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include "ILexer.h"
 #include "Scintilla.h"
@@ -23,9 +24,10 @@
 #include "LexAccessor.h"
 #include "StyleContext.h"
 #include "CharacterSet.h"
-#include "OptionSet.h"
-#include "DefaultLexer.h"
 #include "LexerModule.h"
+#include "OptionSet.h"
+#include "SubStyles.h"
+#include "DefaultLexer.h"
 
 #include "common.h"
 
@@ -158,12 +160,18 @@ struct OptionSetBash : public OptionSet<OptionsBash> {
 	}
 };
 
+const char styleSubable[] = { SCE_SH_IDENTIFIER, SCE_SH_SCALAR, 0 };
+
 class LexBash : public DefaultLexer {
 	WordList keywords;
 	OptionsBash options;
 	OptionSetBash osBash;
+	enum { ssIdentifier, ssScalar };
+	SubStyles subStyles;
 public:
-	LexBash() {
+	LexBash() :
+		//DefaultLexer(lexicalClasses, ELEMENTS(lexicalClasses)),
+		subStyles(styleSubable, 0x80, 0x40, 0) {
 	}
 	virtual ~LexBash() {
 	}
@@ -193,6 +201,36 @@ public:
 	void * SCI_METHOD PrivateCall(int, void *) override {
 		return 0;
 	}
+
+	int SCI_METHOD AllocateSubStyles(int styleBase, int numberStyles) override {
+		return subStyles.Allocate(styleBase, numberStyles);
+	}
+	int SCI_METHOD SubStylesStart(int styleBase) override {
+		return subStyles.Start(styleBase);
+	}
+	int SCI_METHOD SubStylesLength(int styleBase) override {
+		return subStyles.Length(styleBase);
+	}
+	int SCI_METHOD StyleFromSubStyle(int subStyle) override {
+		const int styleBase = subStyles.BaseStyle(subStyle);
+		return styleBase;
+	}
+	int SCI_METHOD PrimaryStyleFromStyle(int style) override {
+		return style;
+	}
+	void SCI_METHOD FreeSubStyles() override {
+		subStyles.Free();
+	}
+	void SCI_METHOD SetIdentifiers(int style, const char *identifiers) override {
+		subStyles.SetIdentifiers(style, identifiers);
+	}
+	int SCI_METHOD DistanceToSecondaryStyles() override {
+		return 0;
+	}
+	const char *SCI_METHOD GetSubStyleBases() override {
+		return styleSubable;
+	}
+
 	static ILexer4 *LexerFactoryBash() {
 		return new LexBash();
 	}
@@ -339,6 +377,9 @@ void SCI_METHOD LexBash::Lex(Sci_PositionU startPos, Sci_Position length, int in
 	};
 	QuoteStackCls QuoteStack;
 
+	const WordClassifier &classifierIdentifiers = subStyles.Classifier(SCE_SH_IDENTIFIER);
+	const WordClassifier &classifierScalars = subStyles.Classifier(SCE_SH_SCALAR);
+
 	int numBase = 0;
 	int digit;
 	Sci_PositionU endPos = startPos + length;
@@ -409,6 +450,11 @@ void SCI_METHOD LexBash::Lex(Sci_PositionU startPos, Sci_Position length, int in
 					char s[500];
 					char s2[10];
 					sc.GetCurrent(s, sizeof(s));
+					int identifierStyle = SCE_SH_IDENTIFIER;
+					int subStyle = classifierIdentifiers.ValueFor(s);
+					if (subStyle >= 0) {
+						identifierStyle = subStyle;
+					}
 					// allow keywords ending in a whitespace or command delimiter
 					s2[0] = static_cast<char>(sc.ch);
 					s2[1] = '\0';
@@ -420,7 +466,7 @@ void SCI_METHOD LexBash::Lex(Sci_PositionU startPos, Sci_Position length, int in
 						else if (strcmp(s, "do") == 0 && keywordEnds)
 							cmdStateNew = BASH_CMD_START;
 						else
-							sc.ChangeState(SCE_SH_IDENTIFIER);
+							sc.ChangeState(identifierStyle);
 						sc.SetState(SCE_SH_DEFAULT);
 						break;
 					}
@@ -430,42 +476,49 @@ void SCI_METHOD LexBash::Lex(Sci_PositionU startPos, Sci_Position length, int in
 							cmdStateNew = BASH_CMD_TEST;
 							testExprType = 0;
 						} else
-							sc.ChangeState(SCE_SH_IDENTIFIER);
+							sc.ChangeState(style);
 					}
 					// detect bash construct keywords
 					else if (bashStruct.InList(s)) {
 						if (cmdState == BASH_CMD_START && keywordEnds)
 							cmdStateNew = BASH_CMD_START;
 						else
-							sc.ChangeState(SCE_SH_IDENTIFIER);
+							sc.ChangeState(identifierStyle);
 					}
 					// 'for'|'case'|'select' needs 'in'|'do' to be highlighted later
 					else if (bashStruct_in.InList(s)) {
 						if (cmdState == BASH_CMD_START && keywordEnds)
 							cmdStateNew = BASH_CMD_WORD;
 						else
-							sc.ChangeState(SCE_SH_IDENTIFIER);
+							sc.ChangeState(identifierStyle);
 					}
 					// disambiguate option items and file test operators
 					else if (s[0] == '-') {
 						if (cmdState != BASH_CMD_TEST)
-							sc.ChangeState(SCE_SH_IDENTIFIER);
+							sc.ChangeState(identifierStyle);
 					}
 					// disambiguate keywords and identifiers
 					else if (cmdState != BASH_CMD_START
 						  || !(keywords.InList(s) && keywordEnds)) {
-						sc.ChangeState(SCE_SH_IDENTIFIER);
+						sc.ChangeState(identifierStyle);
 					}
 					sc.SetState(SCE_SH_DEFAULT);
 				}
 				break;
 			case SCE_SH_IDENTIFIER:
-				if (sc.chPrev == '\\') {	// for escaped chars
-					sc.ForwardSetState(SCE_SH_DEFAULT);
-				} else if (!setWord.Contains(sc.ch)) {
-					sc.SetState(SCE_SH_DEFAULT);
-				} else if (cmdState == BASH_CMD_ARITH && !setWordStart.Contains(sc.ch)) {
-					sc.SetState(SCE_SH_DEFAULT);
+				if (sc.chPrev == '\\' || !setWord.Contains(sc.ch) ||
+					  (cmdState == BASH_CMD_ARITH && !setWordStart.Contains(sc.ch))) {
+					char s[500];
+					sc.GetCurrent(s, sizeof(s));
+					int subStyle = classifierIdentifiers.ValueFor(s);
+					if (subStyle >= 0) {
+						sc.ChangeState(subStyle);
+					}
+					if (sc.chPrev == '\\') {	// for escaped chars
+						sc.ForwardSetState(SCE_SH_DEFAULT);
+					} else {
+						sc.SetState(SCE_SH_DEFAULT);
+					}
 				}
 				break;
 			case SCE_SH_NUMBER:
@@ -619,6 +672,12 @@ void SCI_METHOD LexBash::Lex(Sci_PositionU startPos, Sci_Position length, int in
 				break;
 			case SCE_SH_SCALAR:	// variable names
 				if (!setParam.Contains(sc.ch)) {
+					char s[500];
+					sc.GetCurrent(s, sizeof(s));
+					int subStyle = classifierScalars.ValueFor(s);
+					if (subStyle >= 0) {
+						sc.ChangeState(subStyle);
+					}
 					if (sc.LengthCurrent() == 1) {
 						// Special variable: $(, $_ etc.
 						sc.ForwardSetState(SCE_SH_DEFAULT);
