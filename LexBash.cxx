@@ -476,7 +476,7 @@ void SCI_METHOD LexBash::Lex(Sci_PositionU startPos, Sci_Position length, int in
 							cmdStateNew = BASH_CMD_TEST;
 							testExprType = 0;
 						} else
-							sc.ChangeState(style);
+							sc.ChangeState(identifierStyle);
 					}
 					// detect bash construct keywords
 					else if (bashStruct.InList(s)) {
