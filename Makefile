@@ -5,7 +5,11 @@ TYPE = SHARED
 LEXERS = $(wildcard Lex*.cxx)
 SRCS = $(wildcard lexlib/*.cxx)
 
+ifeq ($(shell uname -p), x86)
+SYSTEM_INCLUDE_PATHS = $(shell findpaths -e -a x86 B_FIND_PATH_HEADERS_DIRECTORY scintilla)
+else
 SYSTEM_INCLUDE_PATHS = $(shell findpaths -e B_FIND_PATH_HEADERS_DIRECTORY scintilla)
+endif
 LOCAL_INCLUDE_PATHS = lexlib
 
 ## Include the Makefile-Engine
