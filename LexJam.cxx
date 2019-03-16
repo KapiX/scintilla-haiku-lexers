@@ -228,11 +228,14 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 				if(sc.ch == ')') {
 					char s[100];
 					sc.GetCurrent(s, sizeof(s));
-					int subStyle = classifierVariables.ValueFor(s);
+					int subStyle = classifierVariables.ValueFor(&s[2]); // skip $(
 					if (subStyle >= 0) {
 						sc.ChangeState(subStyle);
 					}
 					sc.ForwardSetState(varLastStyle);
+					if(varLastStyle == SCE_JAM_STRING && sc.ch == '\"') {
+						sc.ForwardSetState(SCE_JAM_DEFAULT);
+					}
 				}
 			} break;
 			case SCE_JAM_IDENTIFIER: {
