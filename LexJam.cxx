@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Kacper Kasper <kacperkasper@gmail.com>
+ * Copyright 2018-2019 Kacper Kasper <kacperkasper@gmail.com>
  * All rights reserved. Distributed under the terms of the MIT license.
  */
 
@@ -74,9 +74,13 @@ inline bool IsANumber(const char* s)
 
 struct OptionsJam {
 	bool fold;
+	bool foldComment;
+	bool foldCompact;
 
 	OptionsJam() {
 		fold = false;
+		foldComment = false;
+		foldCompact = true;
 	}
 };
 
@@ -88,6 +92,10 @@ static const char *const jamWordListDesc[] = {
 struct OptionSetJam : public OptionSet<OptionsJam> {
 	OptionSetJam() {
 		DefineProperty("fold", &OptionsJam::fold);
+
+		DefineProperty("fold.comment", &OptionsJam::foldComment);
+
+		DefineProperty("fold.compact", &OptionsJam::foldCompact);
 
 		DefineWordListSets(jamWordListDesc);
 	}
@@ -291,7 +299,77 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 	sc.Complete();
 }
 
-void SCI_METHOD LexJam::Fold(Sci_PositionU, Sci_Position, int, IDocument *) {
+static bool IsCommentLine(Sci_Position line, LexAccessor &styler) {
+	Sci_Position pos = styler.LineStart(line);
+	Sci_Position eol_pos = styler.LineStart(line + 1) - 1;
+	for (Sci_Position i = pos; i < eol_pos; i++) {
+		char ch = styler[i];
+		if (ch == '#')
+			return true;
+		else if (ch != ' ' && ch != '\t')
+			return false;
+	}
+	return false;
+}
+
+// Folding code from Bash lexer by Kein-Hong Man
+void SCI_METHOD LexJam::Fold(Sci_PositionU startPos, Sci_Position length, int, IDocument *pAccess) {
+	if(!options.fold)
+		return;
+
+	LexAccessor styler(pAccess);
+
+	Sci_PositionU endPos = startPos + length;
+	int visibleChars = 0;
+	Sci_Position lineCurrent = styler.GetLine(startPos);
+	int levelPrev = styler.LevelAt(lineCurrent) & SC_FOLDLEVELNUMBERMASK;
+	int levelCurrent = levelPrev;
+	char chNext = styler[startPos];
+	int styleNext = styler.StyleAt(startPos);
+	for (Sci_PositionU i = startPos; i < endPos; i++) {
+		char ch = chNext;
+		chNext = styler.SafeGetCharAt(i + 1);
+		int style = styleNext;
+		styleNext = styler.StyleAt(i + 1);
+		bool atEOL = (ch == '\r' && chNext != '\n') || (ch == '\n');
+		// Comment folding
+		if (options.foldComment && atEOL && IsCommentLine(lineCurrent, styler))
+		{
+			if (!IsCommentLine(lineCurrent - 1, styler)
+				&& IsCommentLine(lineCurrent + 1, styler))
+				levelCurrent++;
+			else if (IsCommentLine(lineCurrent - 1, styler)
+					 && !IsCommentLine(lineCurrent + 1, styler))
+				levelCurrent--;
+		}
+
+		if (style == SCE_JAM_OPERATOR) {
+			if (ch == '{') {
+				levelCurrent++;
+			} else if (ch == '}') {
+				levelCurrent--;
+			}
+		}
+
+		if (atEOL) {
+			int lev = levelPrev;
+			if (visibleChars == 0 && options.foldCompact)
+				lev |= SC_FOLDLEVELWHITEFLAG;
+			if ((levelCurrent > levelPrev) && (visibleChars > 0))
+				lev |= SC_FOLDLEVELHEADERFLAG;
+			if (lev != styler.LevelAt(lineCurrent)) {
+				styler.SetLevel(lineCurrent, lev);
+			}
+			lineCurrent++;
+			levelPrev = levelCurrent;
+			visibleChars = 0;
+		}
+		if (!isspacechar(ch))
+			visibleChars++;
+	}
+	// Fill in the real level of the next line, keeping the current flags as they will be filled in later
+	int flagsNext = styler.LevelAt(lineCurrent) & ~SC_FOLDLEVELNUMBERMASK;
+	styler.SetLevel(lineCurrent, levelPrev | flagsNext);
 }
 
 extern "C" {
