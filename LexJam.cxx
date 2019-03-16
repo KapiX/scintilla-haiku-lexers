@@ -10,6 +10,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 #include <stdexcept>
 
 #include <ILexer.h>
@@ -22,13 +23,13 @@
 #include "StyleContext.h"
 #include "CharacterSet.h"
 #include "OptionSet.h"
+#include "SubStyles.h"
 #include "DefaultLexer.h"
 
 #include "common.h"
 
 using namespace Scintilla;
 
-static const char styleSubable[] = { 0 };
 static const char LexerName[] = "Jam";
 
 enum kwType { kwOther, kwLocal, kwFor };
@@ -43,6 +44,8 @@ enum {
 	SCE_JAM_IDENTIFIER,
 	SCE_JAM_VARIABLE
 };
+
+static const char styleSubable[] = { SCE_JAM_IDENTIFIER, SCE_JAM_VARIABLE, 0 };
 
 LexicalClass lexicalClasses[] = {
 	// Lexer Jam SCLEX_JAM SCE_JAM_:
@@ -84,6 +87,8 @@ static const char *const jamWordListDesc[] = {
 
 struct OptionSetJam : public OptionSet<OptionsJam> {
 	OptionSetJam() {
+		DefineProperty("fold", &OptionsJam::fold);
+
 		DefineWordListSets(jamWordListDesc);
 	}
 };
@@ -92,9 +97,12 @@ class LexJam : public DefaultLexer {
 	WordList keywords;
 	OptionsJam options;
 	OptionSetJam osJam;
+	enum { ssIdentifier, ssVariable };
+	SubStyles subStyles;
 public:
 	explicit LexJam() :
-		DefaultLexer(lexicalClasses, ELEMENTS(lexicalClasses)) {
+		DefaultLexer(lexicalClasses, ELEMENTS(lexicalClasses)),
+		subStyles(styleSubable, 0x80, 0x40, 0) {
 	}
 	virtual ~LexJam() override {
 	}
@@ -126,15 +134,34 @@ public:
 	int SCI_METHOD LineEndTypesSupported() override {
 		return SC_LINE_END_TYPE_DEFAULT;
 	}
-	int SCI_METHOD AllocateSubStyles(int styleBase, int numberStyles) override;
-	int SCI_METHOD SubStylesStart(int styleBase) override;
-	int SCI_METHOD SubStylesLength(int styleBase) override;
-	int SCI_METHOD StyleFromSubStyle(int subStyle) override;
-	int SCI_METHOD PrimaryStyleFromStyle(int style) override;
-	void SCI_METHOD FreeSubStyles() override;
-	void SCI_METHOD SetIdentifiers(int style, const char *identifiers) override;
-	int SCI_METHOD DistanceToSecondaryStyles() override;
-	const char * SCI_METHOD GetSubStyleBases() override;
+	int SCI_METHOD AllocateSubStyles(int styleBase, int numberStyles) override {
+		return subStyles.Allocate(styleBase, numberStyles);
+	}
+	int SCI_METHOD SubStylesStart(int styleBase) override {
+		return subStyles.Start(styleBase);
+	}
+	int SCI_METHOD SubStylesLength(int styleBase) override {
+		return subStyles.Length(styleBase);
+	}
+	int SCI_METHOD StyleFromSubStyle(int subStyle) override {
+		const int styleBase = subStyles.BaseStyle(subStyle);
+		return styleBase;
+	}
+	int SCI_METHOD PrimaryStyleFromStyle(int style) override {
+		return style;
+	}
+	void SCI_METHOD FreeSubStyles() override {
+		subStyles.Free();
+	}
+	void SCI_METHOD SetIdentifiers(int style, const char *identifiers) override {
+		subStyles.SetIdentifiers(style, identifiers);
+	}
+	int SCI_METHOD DistanceToSecondaryStyles() override {
+		return 0;
+	}
+	const char *SCI_METHOD GetSubStyleBases() override {
+		return styleSubable;
+	}
 
 	static ILexer4 *LexerFactory() {
 		return new LexJam();
@@ -170,7 +197,10 @@ Sci_Position SCI_METHOD LexJam::WordListSet(int n, const char *wl) {
 void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyle, IDocument *pAccess) {
 	Accessor styler(pAccess, NULL);
 	StyleContext sc(startPos, lengthDoc, initStyle, styler);
-	
+
+	const WordClassifier &classifierIdentifiers = subStyles.Classifier(SCE_JAM_IDENTIFIER);
+	const WordClassifier &classifierVariables = subStyles.Classifier(SCE_JAM_VARIABLE);
+
 	kwType kwLast = kwOther;
 	int varLastStyle = SCE_JAM_DEFAULT;
 	for(; sc.More(); sc.Forward()) {
@@ -196,6 +226,12 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 			} break;
 			case SCE_JAM_VARIABLE: {
 				if(sc.ch == ')') {
+					char s[100];
+					sc.GetCurrent(s, sizeof(s));
+					int subStyle = classifierVariables.ValueFor(s);
+					if (subStyle >= 0) {
+						sc.ChangeState(subStyle);
+					}
 					sc.ForwardSetState(varLastStyle);
 				}
 			} break;
@@ -206,10 +242,19 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 					int style = SCE_JAM_IDENTIFIER;
 					if (kwLast == kwLocal || kwLast == kwFor) {
 						style = SCE_JAM_VARIABLE;
+						int subStyle = classifierVariables.ValueFor(s);
+						if (subStyle >= 0) {
+							style = subStyle;
+						}
 					} else if (keywords.InList(s)) {
 						style = SCE_JAM_KEYWORD;
 					} else if (IsANumber(s)) {
 						style = SCE_JAM_NUMBER;
+					} else {
+						int subStyle = classifierIdentifiers.ValueFor(s);
+						if (subStyle >= 0) {
+							style = subStyle;
+						}
 					}
 					sc.ChangeState(style);
 					sc.SetState(SCE_JAM_DEFAULT);
@@ -244,40 +289,6 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 }
 
 void SCI_METHOD LexJam::Fold(Sci_PositionU, Sci_Position, int, IDocument *) {
-}
-
-int SCI_METHOD LexJam::AllocateSubStyles(int, int) {
-	return -1;
-}
-
-int SCI_METHOD LexJam::SubStylesStart(int) {
-	return -1;
-}
-
-int SCI_METHOD LexJam::SubStylesLength(int) {
-	return 0;
-}
-
-int SCI_METHOD LexJam::StyleFromSubStyle(int subStyle) {
-	return subStyle;
-}
-
-int SCI_METHOD LexJam::PrimaryStyleFromStyle(int style) {
-	return style;
-}
-
-void SCI_METHOD LexJam::FreeSubStyles() {
-}
-
-void SCI_METHOD LexJam::SetIdentifiers(int, const char *) {
-}
-
-int SCI_METHOD LexJam::DistanceToSecondaryStyles() {
-	return 0;
-}
-
-const char * SCI_METHOD LexJam::GetSubStyleBases() {
-	return styleSubable;
 }
 
 extern "C" {
