@@ -247,7 +247,10 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 				}
 			} break;
 			case SCE_JAM_IDENTIFIER: {
-				if(IsASpaceOrTab(sc.ch) || sc.ch == '\n' || sc.ch == '\r' || sc.ch == ']') {
+				if (IsASpaceOrTab(sc.ch)
+					|| (isoperator(static_cast<char>(sc.ch)) && sc.ch != '-')
+					|| sc.ch == '$' || sc.ch == '@'
+					|| sc.ch == '\n' || sc.ch == '\r' || sc.ch == ']') {
 					char s[100];
 					sc.GetCurrent(s, sizeof(s));
 					int style = SCE_JAM_IDENTIFIER;
@@ -268,7 +271,7 @@ void SCI_METHOD LexJam::Lex(Sci_PositionU startPos, Sci_Position lengthDoc, int 
 						}
 					}
 					sc.ChangeState(style);
-					sc.SetState(SCE_JAM_DEFAULT);
+					sc.SetState(sc.ch == '$' ? SCE_JAM_VARIABLE : SCE_JAM_DEFAULT);
 					kwLast = kwOther;
 					if(style == SCE_JAM_KEYWORD) {
 						if(strcmp(s, "local") == 0) {
