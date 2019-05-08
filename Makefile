@@ -1,9 +1,10 @@
-## Haiku Generic Makefile v2.6 ## 
+## Haiku Generic Makefile v2.6 ##
 
 TYPE = SHARED
 
 LEXERS = $(wildcard Lex*.cxx)
 SRCS = $(wildcard lexlib/*.cxx)
+CFLAGS = -std=gnu++17
 
 ifeq ($(shell uname -p), x86)
 SYSTEM_INCLUDE_PATHS = $(shell findpaths -e -a x86 B_FIND_PATH_HEADERS_DIRECTORY scintilla)
