@@ -10,6 +10,6 @@
 
 #define EXT_LEXER_DECL
 
-typedef Scintilla::ILexer4 *(*LexerFactoryFunction)();
+typedef Scintilla::ILexer5 *(*LexerFactoryFunction)();
 
 #endif // _H

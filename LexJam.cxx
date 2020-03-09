@@ -109,7 +109,7 @@ class LexJam : public DefaultLexer {
 	SubStyles subStyles;
 public:
 	explicit LexJam() :
-		DefaultLexer(lexicalClasses, ELEMENTS(lexicalClasses)),
+		DefaultLexer("jam", 10000, lexicalClasses, ELEMENTS(lexicalClasses)),
 		subStyles(styleSubable, 0x80, 0x40, 0) {
 	}
 	virtual ~LexJam() override {
@@ -130,6 +130,9 @@ public:
 		return osJam.DescribeProperty(name);
 	}
 	Sci_Position SCI_METHOD PropertySet(const char *key, const char *val) override;
+	const char * SCI_METHOD PropertyGet(const char *key) override {
+		return osJam.PropertyGet(key);
+	}
 	const char *SCI_METHOD DescribeWordListSets() override {
 		return osJam.DescribeWordListSets();
 	}
@@ -171,7 +174,7 @@ public:
 		return styleSubable;
 	}
 
-	static ILexer4 *LexerFactory() {
+	static ILexer5 *LexerFactory() {
 		return new LexJam();
 	}
 };

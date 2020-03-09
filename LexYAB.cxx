@@ -241,7 +241,9 @@ class LexYAB : public DefaultLexer {
 	enum { ssIdentifier };
 	SubStyles subStyles;
 public:
-	LexYAB(char comment_char_, int (*CheckFoldPoint_)(char const *, int &), const char * const wordListDescriptions[]) :
+	LexYAB(const char *languageName_, int language_, char comment_char_,
+		int (*CheckFoldPoint_)(char const *, int &), const char * const wordListDescriptions[]) :
+						DefaultLexer(languageName_, language_),
 						comment_char(comment_char_),
 						CheckFoldPoint(CheckFoldPoint_),
 						osBasic(wordListDescriptions),
@@ -265,6 +267,9 @@ public:
 		return osBasic.DescribeProperty(name);
 	}
 	Sci_Position SCI_METHOD PropertySet(const char *key, const char *val) override;
+	const char * SCI_METHOD PropertyGet(const char *key) override {
+		return osBasic.PropertyGet(key);
+	}
 	const char * SCI_METHOD DescribeWordListSets() override {
 		return osBasic.DescribeWordListSets();
 	}
@@ -305,8 +310,8 @@ public:
 		return styleSubable;
 	}
 
-	static ILexer4 *LexerFactoryYAB() {
-		return new LexYAB('#', CheckBlitzFoldPoint, blitzbasicWordListDesc);
+	static ILexer5 *LexerFactoryYAB() {
+		return new LexYAB("yabasic", 0, '#', CheckBlitzFoldPoint, blitzbasicWordListDesc);
 	}
 };
 
