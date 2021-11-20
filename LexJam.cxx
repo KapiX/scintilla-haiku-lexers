@@ -29,8 +29,9 @@
 #include "common.h"
 
 using namespace Scintilla;
+using namespace Lexilla;
 
-static const char LexerName[] = "Jam";
+static const char LexerName[] = "jam";
 
 enum kwType { kwOther, kwLocal, kwFor };
 
@@ -404,6 +405,28 @@ LexerFactoryFunction EXT_LEXER_DECL GetLexerFactory(unsigned int index) {
 		return LexJam::LexerFactory;
 	else
 		return 0;
+}
+
+Scintilla::ILexer5* EXT_LEXER_DECL CreateLexer(const char* name) {
+	if(strcmp(name, LexerName) == 0) {
+		return LexJam::LexerFactory();
+	}
+	return nullptr;
+}
+
+const char* EXT_LEXER_DECL LexerNameFromID(int identifier) {
+	return nullptr;
+}
+
+const char* EXT_LEXER_DECL GetLibraryPropertyNames() {
+	return "";
+}
+
+void EXT_LEXER_DECL SetLibraryPropertyNames() {
+}
+
+const char* EXT_LEXER_DECL GetNameSpace() {
+	return "haiku";
 }
 
 } // extern "C"

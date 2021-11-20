@@ -44,6 +44,7 @@
 #include "common.h"
 
 using namespace Scintilla;
+using namespace Lexilla;
 
 /* Bits:
  * 1  - whitespace
@@ -617,6 +618,29 @@ LexerFactoryFunction EXT_LEXER_DECL GetLexerFactory(unsigned int index) {
 		return LexYAB::LexerFactoryYAB;
 	else
 		return 0;
+}
+
+
+Scintilla::ILexer5* EXT_LEXER_DECL CreateLexer(const char* name) {
+	if(strcmp(name, "yab") == 0) {
+		return LexYAB::LexerFactoryYAB();
+	}
+	return nullptr;
+}
+
+const char* EXT_LEXER_DECL LexerNameFromID(int identifier) {
+	return nullptr;
+}
+
+const char* EXT_LEXER_DECL GetLibraryPropertyNames() {
+	return "";
+}
+
+void EXT_LEXER_DECL SetLibraryPropertyNames() {
+}
+
+const char* EXT_LEXER_DECL GetNameSpace() {
+	return "haiku";
 }
 
 }
